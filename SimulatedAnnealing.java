@@ -22,61 +22,65 @@ public class SimulatedAnnealing {
         double temp = temperature;
         int accepted = 0;
         int rejected = 0;
+        int validNeighbors = 0;
+        int invalidNeighbors = 0;
         
         System.out.println("Debut Recuit Simule");
         System.out.println("Solution initiale: " + String.format("%.2f", current.getObjectiveValue()));
+        System.out.println("Temperature: " + temp + ", CoolingRate: " + coolingRate + ", MaxIter: " + maxIterations);
         
         for (int iter = 0; iter < maxIterations && temp > 0.1; iter++) {
             Solution neighbor = generateNeighbor(current);
             
             if (neighbor != null) {
                 DisjunctiveGraph graph = new DisjunctiveGraph(problem, neighbor);
+                graph.computeLongestPaths();
                 
-                if (graph.computeLongestPaths()) {
-                    graph.updateSolutionStartTimes();
-                    neighbor.evaluate();
-                    
-                    double delta = neighbor.getObjectiveValue() - current.getObjectiveValue();
-                    
-                    boolean accept = false;
-                    if (delta > 0) {
+                validNeighbors++;
+                neighbor.evaluate();
+                
+                double delta = neighbor.getObjectiveValue() - current.getObjectiveValue();
+                
+                boolean accept = false;
+                if (delta > 0) {
+                    accept = true;
+                    accepted++;
+                } else {
+                    double prob = Math.exp(delta / temp);
+                    if (random.nextDouble() < prob) {
                         accept = true;
                         accepted++;
                     } else {
-                        double prob = Math.exp(delta / temp);
-                        if (random.nextDouble() < prob) {
-                            accept = true;
-                            accepted++;
-                        } else {
-                            rejected++;
-                        }
+                        rejected++;
                     }
-                    
-                    if (accept) {
-                        current = neighbor;
-                        if (current.getObjectiveValue() > best.getObjectiveValue()) {
-                            best = current.clone();
-                            System.out.println("Iteration " + iter + " - Nouvelle meilleure: " + 
-                                             String.format("%.2f", best.getObjectiveValue()));
-                        }
+                }
+                
+                if (accept) {
+                    current = neighbor;
+                    if (current.getObjectiveValue() > best.getObjectiveValue()) {
+                        best = current.clone();
+                        System.out.println("Iteration " + iter + " - Nouvelle meilleure: " + 
+                                         String.format("%.2f", best.getObjectiveValue()));
                     }
-                } else {
-                    rejected++;
                 }
             }
             
             temp *= coolingRate;
             
-            if (iter % 1000 == 0 && iter > 0) {
+            if (iter % 1000 == 0) {
                 System.out.println("Iteration " + iter + " - T=" + String.format("%.2f", temp) + 
-                                 " - Acceptes=" + accepted + " - Rejetes=" + rejected);
+                                 " - Acceptes=" + accepted + " - Rejetes=" + rejected +
+                                 " - Valides=" + validNeighbors + " - Invalides=" + invalidNeighbors);
             }
         }
         
-        System.out.println("Fin Recuit Simule");
+        System.out.println("Fin Recuit Simule - " + (accepted + rejected) + " tentatives");
         System.out.println("Solution finale: " + String.format("%.2f", best.getObjectiveValue()));
-        System.out.println("Taux acceptation: " + String.format("%.2f%%", 
-                          100.0 * accepted / (accepted + rejected)));
+        System.out.println("Voisins valides: " + validNeighbors + ", invalides: " + invalidNeighbors);
+        if (accepted + rejected > 0) {
+            System.out.println("Taux acceptation: " + String.format("%.2f%%", 
+                              100.0 * accepted / (accepted + rejected)));
+        }
         
         return best;
     }
@@ -84,42 +88,68 @@ public class SimulatedAnnealing {
     private Solution generateNeighbor(Solution current) {
         double rand = random.nextDouble();
         
-        try {
-            if (rand < 0.50) {
-                return batchMove(current);
-            } else if (rand < 0.75) {
-                return operationMove(current);
-            } else {
-                return operationSwitch(current);
+        Solution neighbor = null;
+        int attempts = 0;
+        int maxAttempts = 5;
+        
+        while (neighbor == null && attempts < maxAttempts) {
+            try {
+                if (rand < 0.50) {
+                    neighbor = batchSwap(current);
+                } else if (rand < 0.75) {
+                    neighbor = operationMove(current);
+                } else {
+                    neighbor = operationSwitch(current);
+                }
+            } catch (Exception e) {
+                neighbor = null;
             }
-        } catch (Exception e) {
-            return null;
+            attempts++;
         }
+        
+        return neighbor;
     }
     
-    private Solution batchMove(Solution current) {
+    private Solution batchSwap(Solution current) {
         Solution neighbor = current.clone();
         List<Batch> batches = neighbor.getBatches();
         
-        if (batches.isEmpty()) return null;
+        if (batches.size() < 2) return null;
         
-        Batch batch = batches.get(random.nextInt(batches.size()));
-        if (batch.getOperations().isEmpty()) return null;
-        
-        Operation op = batch.getOperations().get(0);
-        List<Integer> eligible = op.getEligibleMachines();
-        
-        if (eligible.isEmpty()) return null;
-        
-        int newMachineId = eligible.get(random.nextInt(eligible.size()));
-        
-        Batch newBatch = new Batch(batch.getId(), newMachineId, 0);
-        for (Operation o : batch.getOperations()) {
-            newBatch.addOperation(o);
+        Map<Integer, List<Batch>> machineBatches = new HashMap<>();
+        for (Batch b : batches) {
+            if (!b.getOperations().isEmpty()) {
+                machineBatches.computeIfAbsent(b.getMachineId(), k -> new ArrayList<>()).add(b);
+            }
         }
         
-        batches.remove(batch);
-        batches.add(newBatch);
+        List<Integer> machinesWithMultipleBatches = new ArrayList<>();
+        for (Map.Entry<Integer, List<Batch>> entry : machineBatches.entrySet()) {
+            if (entry.getValue().size() >= 2) {
+                machinesWithMultipleBatches.add(entry.getKey());
+            }
+        }
+        
+        if (machinesWithMultipleBatches.isEmpty()) return null;
+        
+        int machineId = machinesWithMultipleBatches.get(random.nextInt(machinesWithMultipleBatches.size()));
+        List<Batch> machineBatchList = machineBatches.get(machineId);
+        
+        int idx1 = random.nextInt(machineBatchList.size());
+        int idx2 = random.nextInt(machineBatchList.size());
+        
+        if (idx1 == idx2) {
+            idx2 = (idx2 + 1) % machineBatchList.size();
+        }
+        
+        Batch b1 = machineBatchList.get(idx1);
+        Batch b2 = machineBatchList.get(idx2);
+        
+        int pos1 = b1.getPosition();
+        b1.setPosition(b2.getPosition());
+        b2.setPosition(pos1);
+        
+        machineBatchList.sort(Comparator.comparingInt(Batch::getPosition));
         
         return neighbor;
     }
@@ -128,37 +158,36 @@ public class SimulatedAnnealing {
         Solution neighbor = current.clone();
         List<Batch> batches = neighbor.getBatches();
         
-        if (batches.isEmpty()) return null;
-        
-        Batch source = batches.get(random.nextInt(batches.size()));
-        if (source.getOperations().isEmpty()) return null;
-        
-        Operation op = source.getOperations().get(random.nextInt(source.getOperations().size()));
-        source.getOperations().remove(op);
-        
-        if (random.nextBoolean() && batches.size() > 1) {
-            for (Batch target : batches) {
-                if (target != source && target.getRecipe() != null && 
-                    target.getRecipe().equals(op.getRecipe())) {
-                    Machine m = problem.getMachine(target.getMachineId());
-                    if (target.getOperations().size() < m.getCapacity()) {
-                        target.addOperation(op);
-                        break;
-                    }
-                }
-            }
-        } else {
-            List<Integer> eligible = op.getEligibleMachines();
-            if (!eligible.isEmpty()) {
-                int machineId = eligible.get(random.nextInt(eligible.size()));
-                Batch newBatch = new Batch(batches.size(), machineId, 0);
-                newBatch.addOperation(op);
-                batches.add(newBatch);
+        List<Batch> candidateBatches = new ArrayList<>();
+        for (Batch b : batches) {
+            if (b.getOperations().size() >= 2) {
+                candidateBatches.add(b);
             }
         }
         
-        if (source.getOperations().isEmpty()) {
-            batches.remove(source);
+        if (candidateBatches.isEmpty()) return null;
+        
+        Batch source = candidateBatches.get(random.nextInt(candidateBatches.size()));
+        Operation op = source.getOperations().get(random.nextInt(source.getOperations().size()));
+        
+        source.getOperations().remove(op);
+        
+        List<Batch> compatibleBatches = new ArrayList<>();
+        for (Batch b : batches) {
+            if (b != source && b.getMachineId() == source.getMachineId() && 
+                b.getRecipe() != null && b.getRecipe().equals(op.getRecipe())) {
+                Machine m = problem.getMachine(b.getMachineId());
+                if (m != null && b.getOperations().size() < m.getCapacity()) {
+                    compatibleBatches.add(b);
+                }
+            }
+        }
+        
+        if (!compatibleBatches.isEmpty()) {
+            Batch target = compatibleBatches.get(random.nextInt(compatibleBatches.size()));
+            target.addOperation(op);
+        } else {
+            source.addOperation(op);
         }
         
         return neighbor;
@@ -170,29 +199,23 @@ public class SimulatedAnnealing {
         
         if (batches.size() < 2) return null;
         
-        List<Batch> sameBatches = new ArrayList<>();
-        String recipe = null;
-        
+        List<Batch> nonEmptyBatches = new ArrayList<>();
         for (Batch b : batches) {
             if (!b.getOperations().isEmpty()) {
-                if (recipe == null) {
-                    recipe = b.getRecipe();
-                    sameBatches.add(b);
-                } else if (recipe.equals(b.getRecipe())) {
-                    sameBatches.add(b);
-                }
+                nonEmptyBatches.add(b);
             }
         }
         
-        if (sameBatches.size() < 2) return null;
+        if (nonEmptyBatches.size() < 2) return null;
         
-        Batch b1 = sameBatches.get(random.nextInt(sameBatches.size()));
+        Batch b1 = nonEmptyBatches.get(random.nextInt(nonEmptyBatches.size()));
         Batch b2;
+        int attempts = 0;
         do {
-            b2 = sameBatches.get(random.nextInt(sameBatches.size()));
-        } while (b1 == b2);
-        
-        if (b1.getOperations().isEmpty() || b2.getOperations().isEmpty()) return null;
+            b2 = nonEmptyBatches.get(random.nextInt(nonEmptyBatches.size()));
+            attempts++;
+            if (attempts > 10) return null;
+        } while (b1 == b2 || !b1.getRecipe().equals(b2.getRecipe()));
         
         Operation op1 = b1.getOperations().get(random.nextInt(b1.getOperations().size()));
         Operation op2 = b2.getOperations().get(random.nextInt(b2.getOperations().size()));

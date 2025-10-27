@@ -10,8 +10,8 @@ public class InitialSolution {
     public Solution build() {
         Solution solution = new Solution(problem);
         
-        List<Job> sorted = new ArrayList<>(problem.getJobs());
-        sorted.sort((j1, j2) -> {
+        List<Job> sortedJobs = new ArrayList<>(problem.getJobs());
+        sortedJobs.sort((j1, j2) -> {
             int lag1 = getMaxLag(j1);
             int lag2 = getMaxLag(j2);
             if (lag1 != lag2) return Integer.compare(lag1, lag2);
@@ -20,10 +20,10 @@ public class InitialSolution {
             return Integer.compare(j2.getPriority(), j1.getPriority());
         });
         
-        Map<Integer, List<Batch>> machineBatches = new HashMap<>();
-        int batchId = 0;
+        Map<Integer, List<Batch>> machineToBatches = new HashMap<>();
+        int batchIdCounter = 0;
         
-        for (Job job : sorted) {
+        for (Job job : sortedJobs) {
             for (Operation op : job.getOperations()) {
                 boolean inserted = false;
                 
@@ -31,17 +31,18 @@ public class InitialSolution {
                     Machine machine = problem.getMachine(machineId);
                     if (machine == null || !machine.canProcess(op.getRecipe())) continue;
                     
-                    List<Batch> batches = machineBatches.getOrDefault(machineId, new ArrayList<>());
-                    
-                    for (Batch batch : batches) {
-                        if (batch.getRecipe().equals(op.getRecipe()) && 
-                            batch.getOperations().size() < machine.getCapacity()) {
-                            batch.addOperation(op);
-                            inserted = true;
-                            break;
+                    List<Batch> batches = machineToBatches.get(machineId);
+                    if (batches != null) {
+                        for (Batch batch : batches) {
+                            if (batch.getRecipe() != null && 
+                                batch.getRecipe().equals(op.getRecipe()) && 
+                                batch.getOperations().size() < machine.getCapacity()) {
+                                batch.addOperation(op);
+                                inserted = true;
+                                break;
+                            }
                         }
                     }
-                    
                     if (inserted) break;
                 }
                 
@@ -49,9 +50,10 @@ public class InitialSolution {
                     for (int machineId : op.getEligibleMachines()) {
                         Machine machine = problem.getMachine(machineId);
                         if (machine != null && machine.canProcess(op.getRecipe())) {
-                            List<Batch> batches = machineBatches.computeIfAbsent(machineId, k -> new ArrayList<>());
+                            List<Batch> batches = machineToBatches.computeIfAbsent(machineId, 
+                                k -> new ArrayList<>());
                             
-                            Batch newBatch = new Batch(batchId++, machineId, batches.size());
+                            Batch newBatch = new Batch(batchIdCounter++, machineId, batches.size());
                             newBatch.addOperation(op);
                             batches.add(newBatch);
                             solution.addBatch(newBatch);
@@ -62,13 +64,47 @@ public class InitialSolution {
             }
         }
         
-        DisjunctiveGraph graph = new DisjunctiveGraph(problem, solution);
-        if (graph.computeLongestPaths()) {
-            graph.updateSolutionStartTimes();
-        }
+        calculateStartTimesSimple(solution, machineToBatches);
         solution.evaluate();
         
         return solution;
+    }
+    
+    private void calculateStartTimesSimple(Solution solution, Map<Integer, List<Batch>> machineToBatches) {
+        for (Map.Entry<Integer, List<Batch>> entry : machineToBatches.entrySet()) {
+            int machineId = entry.getKey();
+            Machine machine = problem.getMachine(machineId);
+            if (machine == null) continue;
+            
+            int currentTime = 0;
+            
+            for (Batch batch : entry.getValue()) {
+                if (batch.getOperations().isEmpty()) continue;
+                
+                int batchStart = currentTime;
+                
+                for (Operation op : batch.getOperations()) {
+                    int requiredTime = op.getJob().getReleaseDate();
+                    
+                    if (op.getIndex() > 0) {
+                        Operation prevOp = op.getJob().getOperations().get(op.getIndex() - 1);
+                        int prevStart = solution.getStartTime(prevOp);
+                        if (prevStart >= 0) {
+                            requiredTime = prevStart + prevOp.getProcessingTime() + prevOp.getMinTimeLag();
+                        }
+                    }
+                    
+                    batchStart = Math.max(batchStart, requiredTime);
+                }
+                
+                batch.setStartTime(batchStart);
+                for (Operation op : batch.getOperations()) {
+                    solution.setStartTime(op, batchStart);
+                }
+                
+                currentTime = batchStart + batch.getProcessingTime() + machine.getInterBatchDelay();
+            }
+        }
     }
     
     private int getMaxLag(Job job) {

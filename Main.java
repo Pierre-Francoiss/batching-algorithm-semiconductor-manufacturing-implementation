@@ -16,9 +16,29 @@ public class Main {
         
         System.out.println("Solution initiale construite en " + buildTime + " ms");
         printSolution("Initiale", initial);
-        System.out.println();
         
-        SimulatedAnnealing sa = new SimulatedAnnealing(problem, 1000.0, 0.95, 5000);
+        System.out.println("\n--- DEBUG Info ---");
+        int opsWithTime = 0;
+        int totalOps = 0;
+        for (Job job : problem.getJobs()) {
+            for (Operation op : job.getOperations()) {
+                totalOps++;
+                int time = initial.getStartTime(op);
+                if (time >= 0) {
+                    opsWithTime++;
+                    if (totalOps <= 5) {
+                        System.out.println("Op " + op.getId() + ": start=" + time + 
+                                         ", duration=" + op.getProcessingTime() + 
+                                         ", end=" + (time + op.getProcessingTime()));
+                    }
+                }
+            }
+        }
+        System.out.println("Operations avec temps: " + opsWithTime + "/" + totalOps);
+        System.out.println("Horizon: " + problem.getHorizon());
+        System.out.println("--- FIN DEBUG ---\n");
+        
+        SimulatedAnnealing sa = new SimulatedAnnealing(problem, 5000.0, 0.98, 10000);
         startTime = System.currentTimeMillis();
         Solution finale = sa.solve(initial);
         long saTime = System.currentTimeMillis() - startTime;
@@ -55,14 +75,16 @@ public class Main {
     private static Problem createTestProblem() {
         Problem problem = new Problem(1440);
         
-        String[] recipes = {"R1", "R2", "R3"};
+        String[] recipes = {"R1", "R2", "R3", "R4", "R5", "R6"};
         
-        Machine m1 = new Machine(1, 4, 10, 10, 5, Arrays.asList("R1", "R2"));
-        Machine m2 = new Machine(2, 4, 10, 10, 5, Arrays.asList("R1", "R2", "R3"));
-        Machine m3 = new Machine(3, 6, 15, 15, 10, Arrays.asList("R1"));
-        Machine m4 = new Machine(4, 6, 15, 15, 10, Arrays.asList("R2"));
-        Machine m5 = new Machine(5, 4, 15, 15, 10, Arrays.asList("R3"));
-        Machine m6 = new Machine(6, 6, 15, 15, 10, Arrays.asList("R1", "R2", "R3"));
+        Machine m1 = new Machine(1, 2, 15, 15, 5, Arrays.asList("R1", "R2"));
+        Machine m2 = new Machine(2, 4, 15, 15, 5, Arrays.asList("R1", "R2", "R3"));
+        Machine m3 = new Machine(3, 4, 20, 20, 10, Arrays.asList("R1", "R4"));
+        Machine m4 = new Machine(4, 6, 20, 20, 10, Arrays.asList("R2", "R3"));
+        Machine m5 = new Machine(5, 4, 20, 20, 10, Arrays.asList("R3", "R5"));
+        Machine m6 = new Machine(6, 6, 20, 20, 10, Arrays.asList("R1", "R2", "R3"));
+        Machine m7 = new Machine(7, 6, 20, 20, 10, Arrays.asList("R4", "R5", "R6"));
+        Machine m8 = new Machine(8, 4, 20, 20, 10, Arrays.asList("R5", "R6"));
         
         problem.addMachine(m1);
         problem.addMachine(m2);
@@ -70,11 +92,13 @@ public class Main {
         problem.addMachine(m4);
         problem.addMachine(m5);
         problem.addMachine(m6);
+        problem.addMachine(m7);
+        problem.addMachine(m8);
         
         Random random = new Random(42);
-        for (int i = 0; i < 30; i++) {
+        for (int i = 0; i < 50; i++) {
             int priority = random.nextInt(10) + 1;
-            int releaseDate = random.nextInt(60);
+            int releaseDate = random.nextInt(120);
             
             Job job = new Job(i, releaseDate, priority, 25);
             
@@ -84,9 +108,18 @@ public class Main {
             job.addOperation(op1);
             
             String recipe2 = recipes[random.nextInt(recipes.length)];
-            Operation op2 = new Operation(i * 10 + 1, job, 1, 180, recipe2, Arrays.asList(3, 4, 5, 6));
-            op2.setTimeLags(0, Integer.MAX_VALUE);
+            Operation op2 = new Operation(i * 10 + 1, job, 1, 180 + random.nextInt(180), recipe2, 
+                                        Arrays.asList(3, 4, 5, 6, 7, 8));
+            op2.setTimeLags(5, 240);
             job.addOperation(op2);
+            
+            if (random.nextDouble() > 0.5) {
+                String recipe3 = recipes[random.nextInt(recipes.length)];
+                Operation op3 = new Operation(i * 10 + 2, job, 2, 120 + random.nextInt(120), 
+                                            recipe3, Arrays.asList(3, 4, 5, 6, 7, 8));
+                op3.setTimeLags(0, Integer.MAX_VALUE);
+                job.addOperation(op3);
+            }
             
             problem.addJob(job);
         }

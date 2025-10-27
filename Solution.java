@@ -42,58 +42,69 @@ public class Solution {
         for (Job job : problem.getJobs()) {
             for (Operation op : job.getOperations()) {
                 int start = getStartTime(op);
-                if (start >= 0 && start <= horizon) {
+                if (start >= 0 && start < horizon) {
                     int end = start + op.getProcessingTime();
-                    double ratio = Math.min(end, horizon) - start;
-                    ratio /= op.getProcessingTime();
-                    fMov += job.getWaferCount() * ratio;
+                    double completionRatio = Math.min(end, horizon) - start;
+                    completionRatio = completionRatio / op.getProcessingTime();
+                    fMov += job.getWaferCount() * completionRatio;
                 }
             }
         }
         
         fBatch = 0;
-        int count = 0;
+        int validBatches = 0;
         for (Batch batch : batches) {
-            if (batch.getStartTime() >= 0 && batch.getStartTime() <= horizon) {
+            if (batch.getStartTime() >= 0 && batch.getStartTime() < horizon && 
+                !batch.getOperations().isEmpty()) {
                 Machine m = problem.getMachine(batch.getMachineId());
-                double cap = m.getCapacity() + (m.getQualifiedRecipes().size() / 100.0);
-                fBatch += batch.getOperations().size() / cap;
-                count++;
-            }
-        }
-        if (count > 0) fBatch /= count;
-        
-        fXFac = 0;
-        int completed = 0;
-        for (Job job : problem.getJobs()) {
-            List<Operation> ops = job.getOperations();
-            if (!ops.isEmpty()) {
-                Operation last = ops.get(ops.size() - 1);
-                int lastEnd = getStartTime(last) + last.getProcessingTime();
-                if (lastEnd <= horizon) {
-                    int total = lastEnd - job.getReleaseDate();
-                    double xf = (double) total / last.getProcessingTime();
-                    fXFac += job.getPriority() * xf;
-                    completed++;
+                if (m != null) {
+                    double denominator = m.getCapacity() + (m.getQualifiedRecipes().size() / 100.0);
+                    fBatch += batch.getOperations().size() / denominator;
+                    validBatches++;
                 }
             }
         }
-        if (completed > 0) fXFac /= completed;
+        if (validBatches > 0) fBatch /= validBatches;
+        
+        fXFac = 0;
+        int completedJobs = 0;
+        for (Job job : problem.getJobs()) {
+            List<Operation> ops = job.getOperations();
+            if (!ops.isEmpty()) {
+                Operation lastOp = ops.get(ops.size() - 1);
+                int lastStart = getStartTime(lastOp);
+                if (lastStart >= 0) {
+                    int lastEnd = lastStart + lastOp.getProcessingTime();
+                    if (lastEnd <= horizon) {
+                        int totalTime = lastEnd - job.getReleaseDate();
+                        double xf = (double) totalTime / lastOp.getProcessingTime();
+                        fXFac += job.getPriority() * xf;
+                        completedJobs++;
+                    }
+                }
+            }
+        }
+        if (completedJobs > 0) fXFac /= completedJobs;
         
         objectiveValue = alpha * fMov + beta * fBatch - gamma * fXFac;
     }
     
     public Solution clone() {
         Solution s = new Solution(problem);
+        
         Map<Batch, Batch> batchMap = new HashMap<>();
         for (Batch b : batches) {
             Batch newB = b.clone(b.getId());
             s.batches.add(newB);
             batchMap.put(b, newB);
         }
-        for (Map.Entry<Operation, Batch> e : operationToBatch.entrySet()) {
-            s.operationToBatch.put(e.getKey(), batchMap.get(e.getValue()));
+        
+        for (Batch newB : s.batches) {
+            for (Operation op : newB.getOperations()) {
+                s.operationToBatch.put(op, newB);
+            }
         }
+        
         s.startTimes = new HashMap<>(startTimes);
         s.objectiveValue = objectiveValue;
         s.fMov = fMov;
