@@ -38,7 +38,7 @@ public class Main {
         System.out.println("Horizon: " + problem.getHorizon());
         System.out.println("--- FIN DEBUG ---\n");
         
-        SimulatedAnnealing sa = new SimulatedAnnealing(problem, 5000.0, 0.98, 10000);
+        SimulatedAnnealing sa = new SimulatedAnnealing(problem, 5000000.0, 0.995, 50000);
         startTime = System.currentTimeMillis();
         Solution finale = sa.solve(initial);
         long saTime = System.currentTimeMillis() - startTime;
@@ -75,49 +75,91 @@ public class Main {
     private static Problem createTestProblem() {
         Problem problem = new Problem(1440);
         
-        String[] recipes = {"R1", "R2", "R3", "R4", "R5", "R6"};
+        String[] recipes = new String[50];
+        for (int i = 0; i < 50; i++) {
+            recipes[i] = "R" + (i + 1);
+        }
         
-        Machine m1 = new Machine(1, 2, 15, 15, 5, Arrays.asList("R1", "R2"));
-        Machine m2 = new Machine(2, 4, 15, 15, 5, Arrays.asList("R1", "R2", "R3"));
-        Machine m3 = new Machine(3, 4, 20, 20, 10, Arrays.asList("R1", "R4"));
-        Machine m4 = new Machine(4, 6, 20, 20, 10, Arrays.asList("R2", "R3"));
-        Machine m5 = new Machine(5, 4, 20, 20, 10, Arrays.asList("R3", "R5"));
-        Machine m6 = new Machine(6, 6, 20, 20, 10, Arrays.asList("R1", "R2", "R3"));
-        Machine m7 = new Machine(7, 6, 20, 20, 10, Arrays.asList("R4", "R5", "R6"));
-        Machine m8 = new Machine(8, 4, 20, 20, 10, Arrays.asList("R5", "R6"));
+        List<Machine> cleaningMachines = new ArrayList<>();
+        for (int i = 1; i <= 12; i++) {
+            List<String> qualifiedRecipes = new ArrayList<>();
+            int numRecipes = 8 + new Random(i).nextInt(12);
+            for (int j = 0; j < numRecipes; j++) {
+                qualifiedRecipes.add(recipes[(i * 3 + j) % 50]);
+            }
+            Machine m = new Machine(i, 2 + new Random(i).nextInt(3), 10 + new Random(i).nextInt(20), 
+                                   10 + new Random(i).nextInt(20), 5, qualifiedRecipes);
+            cleaningMachines.add(m);
+            problem.addMachine(m);
+        }
         
-        problem.addMachine(m1);
-        problem.addMachine(m2);
-        problem.addMachine(m3);
-        problem.addMachine(m4);
-        problem.addMachine(m5);
-        problem.addMachine(m6);
-        problem.addMachine(m7);
-        problem.addMachine(m8);
+        List<Machine> furnaces = new ArrayList<>();
+        for (int i = 13; i <= 82; i++) {
+            List<String> qualifiedRecipes = new ArrayList<>();
+            int numRecipes = 5 + new Random(i).nextInt(10);
+            for (int j = 0; j < numRecipes; j++) {
+                qualifiedRecipes.add(recipes[(i * 2 + j) % 50]);
+            }
+            Machine m = new Machine(i, 4 + new Random(i).nextInt(3), 15 + new Random(i).nextInt(15), 
+                                   15 + new Random(i).nextInt(15), 5 + new Random(i).nextInt(10), 
+                                   qualifiedRecipes);
+            furnaces.add(m);
+            problem.addMachine(m);
+        }
         
         Random random = new Random(42);
-        for (int i = 0; i < 50; i++) {
+        for (int i = 0; i < 700; i++) {
             int priority = random.nextInt(10) + 1;
-            int releaseDate = random.nextInt(120);
+            int releaseDate = random.nextInt(240);
             
             Job job = new Job(i, releaseDate, priority, 25);
             
-            String recipe1 = recipes[random.nextInt(recipes.length)];
-            Operation op1 = new Operation(i * 10, job, 0, 30, recipe1, Arrays.asList(1, 2));
-            op1.setTimeLags(10, 120);
+            String recipe1 = recipes[random.nextInt(50)];
+            List<Integer> eligibleCleaning = new ArrayList<>();
+            for (Machine m : cleaningMachines) {
+                if (m.canProcess(recipe1)) {
+                    eligibleCleaning.add(m.getId());
+                }
+            }
+            if (eligibleCleaning.isEmpty()) {
+                eligibleCleaning.add(1 + random.nextInt(12));
+            }
+            
+            Operation op1 = new Operation(i * 10, job, 0, 20 + random.nextInt(20), recipe1, eligibleCleaning);
+            op1.setTimeLags(10, 240);
             job.addOperation(op1);
             
-            String recipe2 = recipes[random.nextInt(recipes.length)];
-            Operation op2 = new Operation(i * 10 + 1, job, 1, 180 + random.nextInt(180), recipe2, 
-                                        Arrays.asList(3, 4, 5, 6, 7, 8));
+            String recipe2 = recipes[random.nextInt(50)];
+            List<Integer> eligibleFurnaces = new ArrayList<>();
+            for (Machine m : furnaces) {
+                if (m.canProcess(recipe2)) {
+                    eligibleFurnaces.add(m.getId());
+                }
+            }
+            if (eligibleFurnaces.isEmpty()) {
+                eligibleFurnaces.add(13 + random.nextInt(70));
+            }
+            
+            int duration2 = 180 + random.nextInt(420);
+            Operation op2 = new Operation(i * 10 + 1, job, 1, duration2, recipe2, eligibleFurnaces);
             op2.setTimeLags(5, 240);
             job.addOperation(op2);
             
-            if (random.nextDouble() > 0.5) {
-                String recipe3 = recipes[random.nextInt(recipes.length)];
-                Operation op3 = new Operation(i * 10 + 2, job, 2, 120 + random.nextInt(120), 
-                                            recipe3, Arrays.asList(3, 4, 5, 6, 7, 8));
-                op3.setTimeLags(0, Integer.MAX_VALUE);
+            if (random.nextDouble() > 0.7) {
+                String recipe3 = recipes[random.nextInt(50)];
+                eligibleFurnaces = new ArrayList<>();
+                for (Machine m : furnaces) {
+                    if (m.canProcess(recipe3)) {
+                        eligibleFurnaces.add(m.getId());
+                    }
+                }
+                if (eligibleFurnaces.isEmpty()) {
+                    eligibleFurnaces.add(13 + random.nextInt(70));
+                }
+                
+                int duration3 = 120 + random.nextInt(300);
+                Operation op3 = new Operation(i * 10 + 2, job, 2, duration3, recipe3, eligibleFurnaces);
+                op3.setTimeLags(5, 240);
                 job.addOperation(op3);
             }
             

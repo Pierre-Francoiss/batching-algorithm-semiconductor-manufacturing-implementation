@@ -92,11 +92,9 @@ public class Solution {
     public Solution clone() {
         Solution s = new Solution(problem);
         
-        Map<Batch, Batch> batchMap = new HashMap<>();
         for (Batch b : batches) {
             Batch newB = b.clone(b.getId());
             s.batches.add(newB);
-            batchMap.put(b, newB);
         }
         
         for (Batch newB : s.batches) {
@@ -111,6 +109,15 @@ public class Solution {
         s.fBatch = fBatch;
         s.fXFac = fXFac;
         return s;
+    }
+    
+    public void rebuildOperationToBatch() {
+        operationToBatch.clear();
+        for (Batch batch : batches) {
+            for (Operation op : batch.getOperations()) {
+                operationToBatch.put(op, batch);
+            }
+        }
     }
     
     public List<Batch> getBatches() { return batches; }
