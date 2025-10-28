@@ -1,5 +1,6 @@
 import java.util.*;
 
+/* Class modeling a solution to the problem after performing the simulated annealign with every indicators to evaluate the performance*/
 public class Solution {
     private Problem problem;
     private List<Batch> batches;
@@ -32,6 +33,7 @@ public class Solution {
         return startTimes.getOrDefault(op, -1);
     }
     
+    /* This method will be usefull to eveluate the performance of the SA after perfoming it and to compare it with the article data, it calcultate the 3 key indicators fMov, fBatch and fxFac as well as objective Value (goal) as described in the article */
     public void evaluate() {
         int horizon = problem.getHorizon();
         double alpha = 601.0;

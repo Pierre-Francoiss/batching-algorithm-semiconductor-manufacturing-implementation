@@ -9,6 +9,7 @@ public class DisjunctiveGraph {
         this.solution = solution;
     }
     
+    /* Calcul of the longest path in the graph to know when every operation can start */
     public boolean computeLongestPaths() {
         Map<Integer, List<Batch>> machineBatches = new HashMap<>();
         for (Batch batch : solution.getBatches()) {
@@ -17,11 +18,13 @@ public class DisjunctiveGraph {
             }
         }
         
+        /* Order every batches on every machine based on their position */
         for (List<Batch> batches : machineBatches.values()) {
             batches.sort(Comparator.comparingInt(Batch::getPosition));
         }
-        
+        /* Calcul of every begin time with 10 iterations to spread time rules */
         for (int iteration = 0; iteration < 10; iteration++) {
+            /* Verification of the rules on every machines*/
             for (Map.Entry<Integer, List<Batch>> entry : machineBatches.entrySet()) {
                 int machineId = entry.getKey();
                 Machine machine = problem.getMachine(machineId);
@@ -52,14 +55,13 @@ public class DisjunctiveGraph {
                         solution.setStartTime(op, earliestBatchStart);
                     }
                     
+                    /* updating the requiered time for the machine to perform every task */
                     machineTime = earliestBatchStart + batch.getProcessingTime() + machine.getInterBatchDelay();
                 }
             }
         }
-        
+        /* Boolean to check if the algorythm performed well */
         return true;
     }
     
-    public void updateSolutionStartTimes() {
-    }
 }

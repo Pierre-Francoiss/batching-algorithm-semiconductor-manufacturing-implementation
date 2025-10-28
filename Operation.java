@@ -6,6 +6,7 @@ public class Operation {
     private int index;
     private int processingTime;
     private String recipe;
+    /* list of index of eligible machines to perform affectation */
     private List<Integer> eligibleMachines;
     private int minTimeLag;
     private int maxTimeLag;

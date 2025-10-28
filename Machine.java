@@ -6,6 +6,7 @@ public class Machine {
     private int setupTime;
     private int removalTime;
     private int interBatchDelay;
+    /* Listing associated recipes to affect operations to right machines in addition to disponibility */
     private List<String> qualifiedRecipes;
     
     public Machine(int id, int capacity, int setupTime, int removalTime, int interBatchDelay, List<String> qualifiedRecipes) {

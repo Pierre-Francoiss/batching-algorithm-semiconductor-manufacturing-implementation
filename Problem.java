@@ -1,5 +1,6 @@
 import java.util.*;
 
+/* Class modeling the base problem to solve, basically the industrial setup to optimize with the machines, the jobs and the time horizon */
 public class Problem {
     private List<Job> jobs;
     private List<Machine> machines;

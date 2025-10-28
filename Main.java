@@ -2,63 +2,10 @@ import java.util.*;
 
 public class Main {
     
-    public static void main(String[] args) {
-        System.out.println("=== Simulated Annealing - Batching & Scheduling ===\n");
-        
-        Problem problem = createTestProblem();
-        System.out.println("Probleme: " + problem.getJobs().size() + " jobs, " + 
-                          problem.getMachines().size() + " machines\n");
-        
-        long startTime = System.currentTimeMillis();
-        InitialSolution builder = new InitialSolution(problem);
-        Solution initial = builder.build();
-        long buildTime = System.currentTimeMillis() - startTime;
-        
-        System.out.println("Solution initiale construite en " + buildTime + " ms");
-        printSolution("Initiale", initial);
-        
-        System.out.println("\n--- DEBUG Info ---");
-        int opsWithTime = 0;
-        int totalOps = 0;
-        for (Job job : problem.getJobs()) {
-            for (Operation op : job.getOperations()) {
-                totalOps++;
-                int time = initial.getStartTime(op);
-                if (time >= 0) {
-                    opsWithTime++;
-                    if (totalOps <= 5) {
-                        System.out.println("Op " + op.getId() + ": start=" + time + 
-                                         ", duration=" + op.getProcessingTime() + 
-                                         ", end=" + (time + op.getProcessingTime()));
-                    }
-                }
-            }
-        }
-        System.out.println("Operations avec temps: " + opsWithTime + "/" + totalOps);
-        System.out.println("Horizon: " + problem.getHorizon());
-        System.out.println("--- FIN DEBUG ---\n");
-        
-        SimulatedAnnealing sa = new SimulatedAnnealing(problem, 5000000.0, 0.995, 50000);
-        startTime = System.currentTimeMillis();
-        Solution finale = sa.solve(initial);
-        long saTime = System.currentTimeMillis() - startTime;
-        
-        System.out.println("\nTemps execution SA: " + saTime + " ms");
-        printSolution("Finale", finale);
-        
-        double improvement = ((finale.getObjectiveValue() - initial.getObjectiveValue()) 
-                             / Math.abs(initial.getObjectiveValue())) * 100;
-        System.out.println("\nAmelioration globale: " + String.format("%.2f%%", improvement));
-        
-        System.out.println("\nDetails indicateurs:");
-        printIndicatorComparison("fMov", initial.getfMov(), finale.getfMov());
-        printIndicatorComparison("fBatch", initial.getfBatch(), finale.getfBatch());
-        printIndicatorComparison("fXFac", initial.getfXFac(), finale.getfXFac());
-    }
-    
+    /* Testing tools methods */
     private static void printSolution(String label, Solution s) {
         System.out.println(label + ":");
-        System.out.println("  Objectif: " + String.format("%.2f", s.getObjectiveValue()));
+        System.out.println("  Goal: " + String.format("%.2f", s.getObjectiveValue()));
         System.out.println("  fMov: " + String.format("%.2f", s.getfMov()));
         System.out.println("  fBatch: " + String.format("%.4f", s.getfBatch()));
         System.out.println("  fXFac: " + String.format("%.2f", s.getfXFac()));
@@ -168,4 +115,73 @@ public class Main {
         
         return problem;
     }
+
+    /* Global simulation */
+    public static void main(String[] args) {
+        System.out.println("Java inplementation of the Simulated annealing method described in the article: A batching and scheduling algorithm for the diffusion area in semiconductor manufacturing\n");
+        
+        Problem problem = createTestProblem();
+        System.out.println("Problem: " + problem.getJobs().size() + " jobs, " + 
+                          problem.getMachines().size() + " machines\n");
+        
+        long startTime = System.currentTimeMillis();
+        InitialSolution builder = new InitialSolution(problem);
+        Solution initial = builder.build();
+        long buildTime = System.currentTimeMillis() - startTime;
+        
+        System.out.println("Initial solution build in " + buildTime + " ms");
+        printSolution("Initial", initial);
+        
+
+        // SIMULATION 1: Article values
+        System.out.println("SIMULATION 1: T0=5000, alpha=0.95");
+        SimulatedAnnealing sa1 = new SimulatedAnnealing(problem, 5000.0, 0.95, 50000);
+        startTime = System.currentTimeMillis();
+        Solution finale1 = sa1.solve(initial);
+        long saTime1 = System.currentTimeMillis() - startTime;
+        
+        System.out.println("execution time SA: " + saTime1 + " ms");
+        printSolution("Final 1", finale1);
+        
+        double improvement1 = ((finale1.getObjectiveValue() - initial.getObjectiveValue()) 
+                             / Math.abs(initial.getObjectiveValue())) * 100;
+        System.out.println("Improvement: " + String.format("%.2f%%", improvement1));
+        
+        System.out.println("\nindicators:");
+        printIndicatorComparison("fMov", initial.getfMov(), finale1.getfMov());
+        printIndicatorComparison("fBatch", initial.getfBatch(), finale1.getfBatch());
+        printIndicatorComparison("fXFac", initial.getfXFac(), finale1.getfXFac());
+        
+        // SIMULATION 2: Adjusted values for articles results
+        System.out.println("\nSIMULATION 2: T0=5000000, alpha=0.995\n");
+        SimulatedAnnealing sa2 = new SimulatedAnnealing(problem, 5000000.0, 0.995, 50000);
+        startTime = System.currentTimeMillis();
+        Solution finale2 = sa2.solve(initial);
+        long saTime2 = System.currentTimeMillis() - startTime;
+        
+        System.out.println("execution time SA: " + saTime2 + " ms");
+        printSolution("Final 2", finale2);
+        
+        double improvement2 = ((finale2.getObjectiveValue() - initial.getObjectiveValue()) 
+                             / Math.abs(initial.getObjectiveValue())) * 100;
+        System.out.println("improvement: " + String.format("%.2f%%", improvement2));
+        
+        System.out.println("\nindicators:");
+        printIndicatorComparison("fMov", initial.getfMov(), finale2.getfMov());
+        printIndicatorComparison("fBatch", initial.getfBatch(), finale2.getfBatch());
+        printIndicatorComparison("fXFac", initial.getfXFac(), finale2.getfXFac());
+        
+        // COMPARAISON
+        System.out.println("\nComparaison bitween artcile values (temperature and cooling rate) and adjusted values:\n");
+        System.out.println("Simulation 1 (5000, 0.95):");
+        System.out.println("  - goal: " + String.format("%.2f", finale1.getObjectiveValue()));
+        System.out.println("  - improvement: " + String.format("%.2f%%", improvement1));
+        System.out.println("  - time: " + saTime1 + " ms");
+        System.out.println("\nSimulation 2 (5000000, 0.995):");
+        System.out.println("  - goal: " + String.format("%.2f", finale2.getObjectiveValue()));
+        System.out.println("  - improvement: " + String.format("%.2f%%", improvement2));
+        System.out.println("  - time: " + saTime2 + " ms");
+    }
+    
+   
 }

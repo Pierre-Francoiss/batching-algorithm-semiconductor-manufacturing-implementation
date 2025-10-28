@@ -15,94 +15,7 @@ public class SimulatedAnnealing {
         this.random = new Random();
     }
     
-    public Solution solve(Solution initial) {
-        Solution current = initial.clone();
-        Solution best = current.clone();
-        Solution initialSolution = initial.clone();
-        
-        double temp = temperature;
-        int accepted = 0;
-        int rejected = 0;
-        int validNeighbors = 0;
-        int invalidNeighbors = 0;
-        
-        System.out.println("Debut Recuit Simule");
-        System.out.println("Solution initiale: " + String.format("%.2f", current.getObjectiveValue()));
-        System.out.println("Temperature: " + temp + ", CoolingRate: " + coolingRate + ", MaxIter: " + maxIterations);
-        
-        for (int iter = 0; iter < maxIterations && temp > 0.1; iter++) {
-            Solution neighbor = generateNeighbor(current);
-            
-            if (neighbor != null) {
-                neighbor.rebuildOperationToBatch();
-                DisjunctiveGraph graph = new DisjunctiveGraph(problem, neighbor);
-                
-                if (graph.computeLongestPaths()) {
-                    validNeighbors++;
-                    neighbor.evaluate();
-                    
-                    double delta = neighbor.getObjectiveValue() - current.getObjectiveValue();
-                    
-                    if (iter < 10 && delta != 0) {
-                        System.out.println("  Voisin " + iter + ": Obj=" + String.format("%.2f", neighbor.getObjectiveValue()) + 
-                                         ", Delta=" + String.format("%.2f", delta));
-                    }
-                    
-                    boolean accept = false;
-                    if (delta > 0) {
-                        accept = true;
-                        accepted++;
-                    } else {
-                        double prob = Math.exp(delta / temp);
-                        if (iter < 10) {
-                            System.out.println("    Proba acceptation: " + String.format("%.4f", prob));
-                        }
-                        if (random.nextDouble() < prob) {
-                            accept = true;
-                            accepted++;
-                        } else {
-                            rejected++;
-                        }
-                    }
-                    
-                    if (accept) {
-                        current = neighbor;
-                        if (current.getObjectiveValue() > best.getObjectiveValue()) {
-                            best = current.clone();
-                            System.out.println("Iteration " + iter + " - Nouvelle meilleure: " + 
-                                             String.format("%.2f", best.getObjectiveValue()) +
-                                             " (amélioration: " + String.format("%.2f", 
-                                             best.getObjectiveValue() - initialSolution.getObjectiveValue()) + ")");
-                        }
-                    }
-                } else {
-                    invalidNeighbors++;
-                    rejected++;
-                }
-            }
-            
-            temp *= coolingRate;
-            
-            if (iter % 1000 == 0) {
-                System.out.println("Iteration " + iter + " - T=" + String.format("%.2f", temp) + 
-                                 " - Acceptes=" + accepted + " - Rejetes=" + rejected +
-                                 " - Valides=" + validNeighbors + " - Invalides=" + invalidNeighbors);
-            }
-        }
-        
-        System.out.println("Fin Recuit Simule - " + (accepted + rejected) + " tentatives");
-        System.out.println("Solution initiale: " + String.format("%.2f", initialSolution.getObjectiveValue()));
-        System.out.println("Solution finale (best): " + String.format("%.2f", best.getObjectiveValue()));
-        System.out.println("Solution courante (current): " + String.format("%.2f", current.getObjectiveValue()));
-        System.out.println("Voisins valides: " + validNeighbors + ", invalides: " + invalidNeighbors);
-        if (accepted + rejected > 0) {
-            System.out.println("Taux acceptation: " + String.format("%.2f%%", 
-                              100.0 * accepted / (accepted + rejected)));
-        }
-        
-        return best;
-    }
-    
+    /* Method for creation of the new neighboor based on the 3 kinds of move descirbed in the article, few attempts possible to generate a valid one */
     private Solution generateNeighbor(Solution current) {
         double rand = random.nextDouble();
         
@@ -133,12 +46,12 @@ public class SimulatedAnnealing {
         }
         
         if (neighbor == null && attempts >= 20) {
-            System.out.println("ECHEC: Impossible de generer un voisin apres 20 tentatives");
+            System.out.println("Error: Unable to generate a valid neighbor after 20 attempts.");
         }
         
         return neighbor;
     }
-    
+    /* Description of the 3 kinds of moves as descibed in the article */
     private Solution batchMove(Solution current) {
         Solution neighbor = current.clone();
         List<Batch> batches = neighbor.getBatches();
@@ -320,4 +233,103 @@ public class SimulatedAnnealing {
             machineBatches.get(i).setPosition(i);
         }
     }
+
+    /* Main method to perform the process of SA */
+    public Solution solve(Solution initial) {
+        /* initialization */
+        Solution current = initial.clone();
+        Solution best = current.clone();
+        Solution initialSolution = initial.clone();
+        
+        double temp = temperature;
+
+        /* stats for checking if the algorythm works */
+        int accepted = 0;
+        int rejected = 0;
+        int validNeighbors = 0;
+        int invalidNeighbors = 0;
+        
+        System.out.println("Simulated Annealing Start");
+        System.out.println("Initial Solution: " + String.format("%.2f", current.getObjectiveValue()));
+        System.out.println("Temperature: " + temp + ", CoolingRate: " + coolingRate + ", MaxIter: " + maxIterations);
+        /* running the main loop while the limit of iteration is not reached and trhe research is still relevant (temperature) */
+        for (int iter = 0; iter < maxIterations && temp > 0.1; iter++) {
+            /* Generation of a new neighboor and checking if it respect the rules */
+            Solution neighbor = generateNeighbor(current);
+            
+            if (neighbor != null) {
+                neighbor.rebuildOperationToBatch();
+                DisjunctiveGraph graph = new DisjunctiveGraph(problem, neighbor);
+                
+                if (graph.computeLongestPaths()) {
+                    validNeighbors++;
+                    neighbor.evaluate();
+                    
+                    double delta = neighbor.getObjectiveValue() - current.getObjectiveValue();
+                    
+                    if (iter < 10 && delta != 0) {
+                        System.out.println("  Neighboor " + iter + ": Goal=" + String.format("%.2f", neighbor.getObjectiveValue()) + 
+                                         ", Delta=" + String.format("%.2f", delta));
+                    }
+                    
+                    /* checking accpetation criteria : yes if better and yes or no depending on the probability formula if not */
+                    boolean accept = false;
+                    if (delta > 0) {
+                        accept = true;
+                        accepted++;
+                    } else {
+                        double prob = Math.exp(delta / temp);
+                        if (iter < 10) {
+                            System.out.println("   Acceptation probability " + String.format("%.4f", prob));
+                        }
+                        if (random.nextDouble() < prob) {
+                            accept = true;
+                            accepted++;
+                        } else {
+                            rejected++;
+                        }
+                    }
+                    
+                    /* Updating current solution and best solution in case the current solution is the best one */
+                    if (accept) {
+                        current = neighbor;
+                        if (current.getObjectiveValue() > best.getObjectiveValue()) {
+                            best = current.clone();
+                            System.out.println("Iteration " + iter + " - New Best: " + 
+                                             String.format("%.2f", best.getObjectiveValue()) +
+                                             " (improvement: " + String.format("%.2f", 
+                                             best.getObjectiveValue() - initialSolution.getObjectiveValue()) + ")");
+                        }
+                    }
+                } else {
+                    invalidNeighbors++;
+                    rejected++;
+                }
+            }
+            /* temeprature updating */
+            temp *= coolingRate;
+            
+            /* Printing result every 1000 iterations for clarity */
+            if (iter % 1000 == 0) {
+                System.out.println("Iteration " + iter + " - T=" + String.format("%.2f", temp) + 
+                                 " - Accepted=" + accepted + " - Rejected=" + rejected +
+                                 " - Valides=" + validNeighbors + " - Not valides=" + invalidNeighbors);
+            }
+        }
+        
+        /* Final results */
+        System.out.println("Simulated Annealing End - " + (accepted + rejected) + " trials");
+        System.out.println("Initial Solution: " + String.format("%.2f", initialSolution.getObjectiveValue()));
+        System.out.println("Best Solution Found: " + String.format("%.2f", best.getObjectiveValue()));
+        System.out.println("Current Solution: " + String.format("%.2f", current.getObjectiveValue()));
+        System.out.println("Acceptable Neighboors: " + validNeighbors + ", unacceptables: " + invalidNeighbors);
+        if (accepted + rejected > 0) {
+            System.out.println("Acceptation Rate: " + String.format("%.2f%%", 
+                              100.0 * accepted / (accepted + rejected)));
+        }
+        
+        return best;
+    }
+    
+    
 }

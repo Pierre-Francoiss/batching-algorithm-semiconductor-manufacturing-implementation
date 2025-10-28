@@ -1,5 +1,6 @@
 import java.util.*;
 
+/* This class represent a first solution created by performing PBIA on the model, we will then perform the simulated annealign based on it*/
 public class InitialSolution {
     private Problem problem;
     
@@ -9,7 +10,7 @@ public class InitialSolution {
     
     public Solution build() {
         Solution solution = new Solution(problem);
-        
+        /* Copy and sort jobs based on the priority rules of heuristic  */
         List<Job> sortedJobs = new ArrayList<>(problem.getJobs());
         sortedJobs.sort((j1, j2) -> {
             int lag1 = getMaxLag(j1);
@@ -20,6 +21,7 @@ public class InitialSolution {
             return Integer.compare(j2.getPriority(), j1.getPriority());
         });
         
+        /* create a map for batchs to machines affectations*/
         Map<Integer, List<Batch>> machineToBatches = new HashMap<>();
         int batchIdCounter = 0;
         
@@ -27,6 +29,7 @@ public class InitialSolution {
             for (Operation op : job.getOperations()) {
                 boolean inserted = false;
                 
+                /* for every operations research of an existing batche to add the operations in it */
                 for (int machineId : op.getEligibleMachines()) {
                     Machine machine = problem.getMachine(machineId);
                     if (machine == null || !machine.canProcess(op.getRecipe())) continue;
@@ -45,7 +48,7 @@ public class InitialSolution {
                     }
                     if (inserted) break;
                 }
-                
+                 /* if there is no compatible batches we create a new batch to store this operation */
                 if (!inserted) {
                     for (int machineId : op.getEligibleMachines()) {
                         Machine machine = problem.getMachine(machineId);
@@ -64,12 +67,14 @@ public class InitialSolution {
             }
         }
         
+        /*Evaluation of this solution */
         calculateStartTimesSimple(solution, machineToBatches);
         solution.evaluate();
         
         return solution;
     }
     
+    /* Calcul of the start time of every operations based on the rules descibed in the article */
     private void calculateStartTimesSimple(Solution solution, Map<Integer, List<Batch>> machineToBatches) {
         for (Map.Entry<Integer, List<Batch>> entry : machineToBatches.entrySet()) {
             int machineId = entry.getKey();
@@ -77,15 +82,16 @@ public class InitialSolution {
             if (machine == null) continue;
             
             int currentTime = 0;
-            
+            /* for every batch scheduled on a machine */
             for (Batch batch : entry.getValue()) {
                 if (batch.getOperations().isEmpty()) continue;
-                
+                /* start the operation ASAP */
                 int batchStart = currentTime;
-                
+                /* calcul of the time diff based on the rules to update currentTime */
                 for (Operation op : batch.getOperations()) {
+                    /* Release date */
                     int requiredTime = op.getJob().getReleaseDate();
-                    
+                    /* Last operation must be complete */
                     if (op.getIndex() > 0) {
                         Operation prevOp = op.getJob().getOperations().get(op.getIndex() - 1);
                         int prevStart = solution.getStartTime(prevOp);
@@ -97,6 +103,7 @@ public class InitialSolution {
                     batchStart = Math.max(batchStart, requiredTime);
                 }
                 
+                /* Every operations of the batch should start at the same time */
                 batch.setStartTime(batchStart);
                 for (Operation op : batch.getOperations()) {
                     solution.setStartTime(op, batchStart);
@@ -107,6 +114,7 @@ public class InitialSolution {
         }
     }
     
+    /*Calcul of the max timelag for a job */
     private int getMaxLag(Job job) {
         int max = 0;
         for (Operation op : job.getOperations()) {

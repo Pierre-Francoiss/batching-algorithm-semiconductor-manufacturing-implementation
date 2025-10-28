@@ -3,6 +3,7 @@ import java.util.List;
 
 public class Job {
     private int id;
+    /* List every operations by the job  */
     private List<Operation> operations;
     private int releaseDate;
     private int priority;

@@ -1,6 +1,7 @@
 import java.util.ArrayList;
 import java.util.List;
 
+/* As explained in the article a batch consist of one or several operations on a single machine at a precise time */
 public class Batch {
     private int id;
     private List<Operation> operations;
@@ -20,10 +21,12 @@ public class Batch {
         operations.add(op);
     }
     
+    /* Every operations have the same recipe so we can just grap the first one to cover every cases */
     public String getRecipe() {
         return operations.isEmpty() ? null : operations.get(0).getRecipe();
     }
     
+    /* same logic than for recipe */
     public int getProcessingTime() {
         return operations.isEmpty() ? 0 : operations.get(0).getProcessingTime();
     }
